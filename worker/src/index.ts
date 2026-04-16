@@ -183,11 +183,6 @@ export default {
     const method = request.method
 
     try {
-      if (method === 'GET' && pathname === '/debug') {
-        const key = env.NOTION_API_KEY ?? ''
-        return json({ keySet: key.length > 0, keyLength: key.length, keyPrefix: key.substring(0, 8) })
-      }
-
       if (method === 'GET' && pathname === '/runs') {
         return await handleGetRuns(env)
       }
