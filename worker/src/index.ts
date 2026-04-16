@@ -1,5 +1,5 @@
 export interface Env {
-  RUNCOACH_KV: KVNamespace
+  RUNNING_KV: KVNamespace
   NOTION_API_KEY: string
   NOTION_DB_ID: string
   STRAVA_CLIENT_ID: string

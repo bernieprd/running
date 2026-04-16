@@ -11,6 +11,5 @@ compatibility_date = "2024-03-01"
 #   ANTHROPIC_API_KEY
 
 [[kv_namespaces]]
-binding = "RUNCOACH_KV"
-# Replace with your KV namespace ID from: Cloudflare dashboard → Workers & Pages → KV
-id = "00000000000000000000000000000000"
+binding = "RUNNING_KV"
+id = "f4df8303c25e4f1682c5c7d005a65ea1"
