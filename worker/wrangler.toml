@@ -1,0 +1,16 @@
+name = "runcoach-api"
+main = "src/index.ts"
+compatibility_date = "2024-03-01"
+
+# Secrets (set via `wrangler secret put` or Cloudflare dashboard — never committed):
+#   NOTION_API_KEY
+#   NOTION_DB_ID
+#   STRAVA_CLIENT_ID
+#   STRAVA_CLIENT_SECRET
+#   STRAVA_PLAN_START_DATE
+#   ANTHROPIC_API_KEY
+
+[[kv_namespaces]]
+binding = "RUNCOACH_KV"
+# Replace with your KV namespace ID from: Cloudflare dashboard → Workers & Pages → KV
+id = "00000000000000000000000000000000"
