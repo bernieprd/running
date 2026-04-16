@@ -12,6 +12,10 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        surface: "hsl(var(--surface))",
+        "surface-high": "hsl(var(--surface-high))",
+        success: "hsl(var(--success))",
+        info: "hsl(var(--info))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -40,6 +44,10 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      fontFamily: {
+        syne: ['Syne', 'sans-serif'],
+        'mono-dm': ['DM Mono', 'monospace'],
       },
       borderRadius: {
         lg: "var(--radius)",
