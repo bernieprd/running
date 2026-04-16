@@ -142,9 +142,9 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
     return json({ error: 'Invalid request body' }, 400)
   }
 
-  const VALID_EFFORT = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+  const VALID_EFFORT = new Set(['1 - Very Easy', '2 - Easy', '3 - Moderate', '4 - Hard', '5 - Very Hard'])
   if (body.effortRating !== undefined && !VALID_EFFORT.has(body.effortRating)) {
-    return json({ error: 'Invalid effortRating value' }, 400)
+    return json({ error: 'Invalid effortRating value. Must be one of: 1 - Very Easy, 2 - Easy, 3 - Moderate, 4 - Hard, 5 - Very Hard' }, 400)
   }
 
   const properties: Record<string, unknown> = {}
