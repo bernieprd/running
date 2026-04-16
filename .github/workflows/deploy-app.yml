@@ -37,6 +37,8 @@ jobs:
       - name: Build
         working-directory: app
         run: npm run build
+        env:
+          VITE_API_BASE_URL: https://runcoach-api.bernardoprd.workers.dev
 
       - uses: actions/configure-pages@v4
 
