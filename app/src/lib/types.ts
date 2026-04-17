@@ -41,3 +41,15 @@ export interface PatchRunBody {
   notes?: string
   effortRating?: string | null
 }
+
+export interface SyncedRun {
+  notionPageId: string
+  runName: string
+  stravaActivityId: number
+}
+
+export interface SyncResult {
+  synced: SyncedRun[]
+  skipped: number
+  ambiguous: number
+}
