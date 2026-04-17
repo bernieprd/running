@@ -44,7 +44,7 @@ interface PatchRunBody {
   completed?: boolean
   completedAt?: string | null
   notes?: string
-  effortRating?: string
+  effortRating?: string | null
 }
 
 interface NotionProperty {
@@ -145,7 +145,7 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
   }
 
   const VALID_EFFORT = new Set(['1 - Very Easy', '2 - Easy', '3 - Moderate', '4 - Hard', '5 - Very Hard'])
-  if (body.effortRating !== undefined && !VALID_EFFORT.has(body.effortRating)) {
+  if (body.effortRating !== undefined && body.effortRating !== null && !VALID_EFFORT.has(body.effortRating)) {
     return json({ error: 'Invalid effortRating value. Must be one of: 1 - Very Easy, 2 - Easy, 3 - Moderate, 4 - Hard, 5 - Very Hard' }, 400)
   }
 
@@ -161,7 +161,9 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
     properties['Notes'] = { rich_text: [{ text: { content: body.notes } }] }
   }
   if (body.effortRating !== undefined) {
-    properties['Effort Rating'] = { select: { name: body.effortRating } }
+    properties['Effort Rating'] = body.effortRating === null
+      ? { select: null }
+      : { select: { name: body.effortRating } }
   }
 
   if (Object.keys(properties).length === 0) {

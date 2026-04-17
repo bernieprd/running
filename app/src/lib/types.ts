@@ -39,5 +39,5 @@ export interface PatchRunBody {
   completed?: boolean
   completedAt?: string | null
   notes?: string
-  effortRating?: string
+  effortRating?: string | null
 }
