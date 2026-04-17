@@ -356,13 +356,11 @@ async function handleStravaSync(env: Env): Promise<Response> {
 
     const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
     const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
-    const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
 
     const properties: Record<string, unknown> = {
       'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
       'Distance (km)':     { number: distanceKm },
       'Avg Pace (min/km)': { number: avgPaceMinKm },
-      'Elapsed Time':      { number: elapsedTimeMinutes },
     }
     if (activity.average_heartrate !== undefined) {
       properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -444,13 +442,11 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
 
   const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
   const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
-  const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
 
   const properties: Record<string, unknown> = {
     'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
     'Distance (km)':     { number: distanceKm },
     'Avg Pace (min/km)': { number: avgPaceMinKm },
-    'Elapsed Time':      { number: elapsedTimeMinutes },
   }
   if (activity.average_heartrate !== undefined) {
     properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
