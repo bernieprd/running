@@ -53,3 +53,11 @@ export interface SyncResult {
   skipped: number
   ambiguous: number
 }
+
+export interface UnmatchedActivity {
+  id: number
+  date: string
+  distanceKm: number
+  avgPaceMinKm: number
+  avgHr: number | null
+}

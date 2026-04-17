@@ -9,7 +9,8 @@ import { Textarea } from './ui/textarea'
 import { EffortBar } from './EffortBar'
 import { cn, formatDate, formatPace } from '../lib/utils'
 import { EFFORT_LABELS } from '../lib/types'
-import type { RunType } from '../lib/types'
+import type { RunType, UnmatchedActivity } from '../lib/types'
+import { fetchUnmatchedActivities, linkStravaActivity } from '../lib/api'
 
 function runTypeBadgeVariant(type: RunType | null) {
   switch (type) {
@@ -24,12 +25,18 @@ function runTypeBadgeVariant(type: RunType | null) {
 export function DetailOverlay() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { state: { runs }, updateRun } = useRuns()
+  const { state: { runs }, updateRun, refetch } = useRuns()
   const run = runs.find(r => r.id === id)
 
   const [visible, setVisible] = useState(false)
   const [notes, setNotes] = useState(run?.notes ?? '')
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [showPicker, setShowPicker] = useState(false)
+  const [activities, setActivities] = useState<UnmatchedActivity[]>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerError, setPickerError] = useState<string | null>(null)
+  const [linking, setLinking] = useState<number | null>(null)
 
   // Sync notes when run changes (e.g. after optimistic update)
   useEffect(() => {
@@ -83,6 +90,37 @@ export function DetailOverlay() {
       updateRun(run!.id, { completed: false, completedAt: null })
     } else {
       updateRun(run!.id, { completed: true, completedAt: new Date().toISOString() })
+    }
+  }
+
+  async function handleLinkStrava() {
+    if (showPicker) {
+      setShowPicker(false)
+      return
+    }
+    setPickerLoading(true)
+    setPickerError(null)
+    try {
+      const result = await fetchUnmatchedActivities()
+      setActivities(result)
+      setShowPicker(true)
+    } catch (e) {
+      setPickerError((e as Error).message)
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  async function handlePickActivity(activityId: number) {
+    setLinking(activityId)
+    try {
+      await linkStravaActivity(run!.id, activityId)
+      setShowPicker(false)
+      refetch()
+    } catch (e) {
+      setPickerError((e as Error).message)
+    } finally {
+      setLinking(null)
     }
   }
 
@@ -183,12 +221,44 @@ export function DetailOverlay() {
 
         {/* Link Strava */}
         {!stravaSynced && (
-          <button
-            type="button"
-            className="w-full rounded-xl border border-dashed border-border py-3 font-mono-dm text-xs text-muted-foreground"
-          >
-            Link Strava activity
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={handleLinkStrava}
+              disabled={pickerLoading || linking !== null}
+              className="w-full rounded-xl border border-dashed border-border py-3 font-mono-dm text-xs text-muted-foreground disabled:opacity-50"
+            >
+              {pickerLoading ? 'Loading activities…' : showPicker ? 'Cancel' : 'Link Strava activity'}
+            </button>
+
+            {pickerError && (
+              <p className="font-mono-dm text-xs text-red-500 text-center mt-2">{pickerError}</p>
+            )}
+
+            {showPicker && activities.length === 0 && (
+              <p className="font-mono-dm text-xs text-muted-foreground text-center mt-2">No unmatched activities found</p>
+            )}
+
+            {showPicker && activities.map(act => (
+              <button
+                key={act.id}
+                type="button"
+                onClick={() => handlePickActivity(act.id)}
+                disabled={linking !== null}
+                className="mt-2 w-full rounded-xl bg-surface border border-border px-4 py-3 text-left flex items-center gap-2 disabled:opacity-50"
+              >
+                <span className="font-mono-dm text-xs text-muted-foreground">{act.date}</span>
+                <span className="font-syne text-sm font-extrabold">{act.distanceKm.toFixed(1)} km</span>
+                <span className="font-mono-dm text-xs text-muted-foreground">{formatPace(act.avgPaceMinKm)} /km</span>
+                {act.avgHr !== null && (
+                  <span className="font-mono-dm text-xs text-muted-foreground">{act.avgHr} bpm</span>
+                )}
+                {linking === act.id && (
+                  <span className="ml-auto font-mono-dm text-xs text-muted-foreground">Linking…</span>
+                )}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
