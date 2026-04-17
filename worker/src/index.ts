@@ -6,6 +6,8 @@ export interface Env {
   STRAVA_CLIENT_SECRET: string
   STRAVA_PLAN_START_DATE: string
   ANTHROPIC_API_KEY: string
+  CF_ACCESS_CLIENT_ID: string
+  CF_ACCESS_CLIENT_SECRET: string
 }
 
 const CORS = {
@@ -174,8 +176,15 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // OPTIONS preflights must be answered before auth — browsers never send custom headers on preflights
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS })
+      return new Response(null, { status: 204, headers: CORS })
+    }
+
+    const clientId = request.headers.get('CF-Access-Client-Id') ?? ''
+    const clientSecret = request.headers.get('CF-Access-Client-Secret') ?? ''
+    if (clientId !== env.CF_ACCESS_CLIENT_ID || clientSecret !== env.CF_ACCESS_CLIENT_SECRET) {
+      return json({ error: 'Unauthorized' }, 401)
     }
 
     const url = new URL(request.url)
