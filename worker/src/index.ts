@@ -89,6 +89,14 @@ interface SyncResult {
   ambiguous: number
 }
 
+interface UnmatchedActivity {
+  id: number
+  date: string
+  distanceKm: number
+  avgPaceMinKm: number
+  avgHr: number | null
+}
+
 // ---- Helpers ----
 
 function json(body: unknown, status = 200): Response {
@@ -375,6 +383,83 @@ async function handleStravaSync(env: Env): Promise<Response> {
   return json(result)
 }
 
+async function handleGetUnmatchedActivities(env: Env): Promise<Response> {
+  const tokens = await getStravaTokens(env)
+
+  const url = `https://www.strava.com/api/v3/athlete/activities?per_page=30`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  })
+  if (!res.ok) throw new Error(`Strava activities fetch failed: ${await res.text()}`)
+  const activities = await res.json() as StravaActivity[]
+
+  const notionResult = await notionQueryDB(
+    env.NOTION_DB_ID,
+    {
+      filter: {
+        property: 'Strava Activity ID',
+        rich_text: { is_not_empty: true },
+      },
+    },
+    env.NOTION_API_KEY,
+  ) as { results: NotionPage[] }
+
+  const linkedIds = new Set(
+    notionResult.results.map(p => p.properties['Strava Activity ID']?.rich_text?.[0]?.plain_text ?? '')
+  )
+
+  const unmatched: UnmatchedActivity[] = activities
+    .filter(a => !linkedIds.has(String(a.id)))
+    .slice(0, 10)
+    .map(a => ({
+      id: a.id,
+      date: dateOnly(a.start_date),
+      distanceKm: parseFloat((a.distance / 1000).toFixed(2)),
+      avgPaceMinKm: parseFloat((1 / (a.average_speed * 60 / 1000)).toFixed(2)),
+      avgHr: a.average_heartrate !== undefined ? Math.round(a.average_heartrate) : null,
+    }))
+
+  return json(unmatched)
+}
+
+async function handleLinkStrava(pageId: string, request: Request, env: Env): Promise<Response> {
+  let body: { stravaActivityId?: number }
+  try {
+    body = await request.json() as { stravaActivityId?: number }
+  } catch {
+    return json({ error: 'Invalid request body' }, 400)
+  }
+
+  if (!body.stravaActivityId) {
+    return json({ error: 'Missing stravaActivityId' }, 400)
+  }
+
+  const tokens = await getStravaTokens(env)
+
+  const actRes = await fetch(`https://www.strava.com/api/v3/activities/${body.stravaActivityId}`, {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  })
+  if (!actRes.ok) throw new Error(`Strava activity fetch failed: ${await actRes.text()}`)
+  const activity = await actRes.json() as StravaActivity
+
+  const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
+  const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
+  const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
+
+  const properties: Record<string, unknown> = {
+    'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
+    'Distance (km)':     { number: distanceKm },
+    'Avg Pace (min/km)': { number: avgPaceMinKm },
+    'Elapsed Time':      { number: elapsedTimeMinutes },
+  }
+  if (activity.average_heartrate !== undefined) {
+    properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
+  }
+
+  const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
+  return json(notionPageToRun(updated))
+}
+
 // ---- Router ----
 
 export default {
@@ -421,6 +506,16 @@ export default {
 
       if (method === 'POST' && pathname === '/strava/sync') {
         return await handleStravaSync(env)
+      }
+
+      if (method === 'GET' && pathname === '/strava/activities/unmatched') {
+        return await handleGetUnmatchedActivities(env)
+      }
+
+      if (method === 'POST' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
+        const pageId = pathname.split('/')[2]
+        if (!pageId) return json({ error: 'Missing run ID' }, 400)
+        return await handleLinkStrava(pageId, request, env)
       }
 
       return json({ error: 'Not found' }, 404)
