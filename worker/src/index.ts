@@ -456,6 +456,17 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
   return json(notionPageToRun(updated))
 }
 
+async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
+  const properties: Record<string, unknown> = {
+    'Strava Activity ID': { rich_text: [] },
+    'Distance (km)':      { number: null },
+    'Avg Pace (min/km)':  { number: null },
+    'Avg HR':             { number: null },
+  }
+  const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
+  return json(notionPageToRun(updated))
+}
+
 // ---- Router ----
 
 export default {
@@ -512,6 +523,12 @@ export default {
         const pageId = pathname.split('/')[2]
         if (!pageId) return json({ error: 'Missing run ID' }, 400)
         return await handleLinkStrava(pageId, request, env)
+      }
+
+      if (method === 'DELETE' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
+        const pageId = pathname.split('/')[2]
+        if (!pageId) return json({ error: 'Missing run ID' }, 400)
+        return await handleUnlinkStrava(pageId, env)
       }
 
       return json({ error: 'Not found' }, 404)

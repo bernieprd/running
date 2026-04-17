@@ -10,7 +10,7 @@ import { EffortBar } from './EffortBar'
 import { cn, formatDate, formatPace } from '../lib/utils'
 import { EFFORT_LABELS } from '../lib/types'
 import type { RunType, UnmatchedActivity } from '../lib/types'
-import { fetchUnmatchedActivities, linkStravaActivity } from '../lib/api'
+import { fetchUnmatchedActivities, linkStravaActivity, unlinkStravaActivity } from '../lib/api'
 
 function runTypeBadgeVariant(type: RunType | null) {
   switch (type) {
@@ -37,6 +37,7 @@ export function DetailOverlay() {
   const [pickerLoading, setPickerLoading] = useState(false)
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [linking, setLinking] = useState<number | null>(null)
+  const [unlinking, setUnlinking] = useState(false)
 
   // Sync notes when run changes (e.g. after optimistic update)
   useEffect(() => {
@@ -90,6 +91,18 @@ export function DetailOverlay() {
       updateRun(run!.id, { completed: false, completedAt: null })
     } else {
       updateRun(run!.id, { completed: true, completedAt: new Date().toISOString() })
+    }
+  }
+
+  async function handleUnlinkStrava() {
+    setUnlinking(true)
+    try {
+      await unlinkStravaActivity(run!.id)
+      refetch()
+    } catch {
+      // no-op
+    } finally {
+      setUnlinking(false)
     }
   }
 
@@ -168,38 +181,38 @@ export function DetailOverlay() {
           </CardOrange>
         )}
 
-        {stravaSynced ? (
-          /* Strava stats */
-          <div className="grid grid-cols-3 gap-3">
+        {stravaSynced && (
+          <div className="bg-surface rounded-xl border border-border divide-y divide-border">
             {[
               { label: 'Distance', value: run.distanceKm !== null ? `${run.distanceKm.toFixed(1)} km` : '—' },
               { label: 'Avg Pace', value: run.avgPaceMinKm !== null ? formatPace(run.avgPaceMinKm) : '—' },
               { label: 'Avg HR', value: run.avgHr !== null ? `${run.avgHr} bpm` : '—' },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface rounded-xl border border-border p-3 text-center">
-                <p className="font-syne text-xl font-extrabold">{stat.value}</p>
-                <p className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{stat.label}</p>
+              <div key={stat.label} className="flex items-center justify-between px-4 py-3">
+                <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                <p className="font-syne text-lg font-extrabold">{stat.value}</p>
               </div>
             ))}
           </div>
-        ) : (
-          /* Effort + notes + complete */
-          <div className="space-y-4">
-            <div>
-              <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider mb-2">Effort</p>
-              <EffortBar value={effortNum} interactive onChange={handleEffortChange} />
-            </div>
+        )}
 
-            <div>
-              <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider mb-2">Notes</p>
-              <Textarea
-                placeholder="How did it feel?"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                onBlur={handleNotesBlur}
-              />
-            </div>
+        <div className="space-y-4">
+          <div>
+            <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider mb-2">Effort</p>
+            <EffortBar value={effortNum} interactive onChange={handleEffortChange} />
+          </div>
 
+          <div>
+            <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider mb-2">Notes</p>
+            <Textarea
+              placeholder="How did it feel?"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              onBlur={handleNotesBlur}
+            />
+          </div>
+
+          {!stravaSynced && (
             <Button
               size="lg"
               variant={run.completed ? 'success' : 'default'}
@@ -208,8 +221,8 @@ export function DetailOverlay() {
             >
               {run.completed ? 'Completed ✓' : 'Mark Complete'}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Coach notes */}
         {run.coachNotes && (
@@ -217,6 +230,17 @@ export function DetailOverlay() {
             <p className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Coach notes</p>
             <p className="text-sm text-foreground">{run.coachNotes}</p>
           </div>
+        )}
+
+        {stravaSynced && (
+          <button
+            type="button"
+            onClick={handleUnlinkStrava}
+            disabled={unlinking}
+            className="w-full rounded-xl border border-dashed border-border py-3 font-mono-dm text-xs text-muted-foreground disabled:opacity-50"
+          >
+            {unlinking ? 'Removing Strava link…' : 'Unsync Strava'}
+          </button>
         )}
 
         {/* Link Strava */}

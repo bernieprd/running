@@ -53,6 +53,22 @@ export async function linkStravaActivity(runId: string, stravaActivityId: number
   return res.json()
 }
 
+export async function unlinkStravaActivity(runId: string): Promise<RunResponse> {
+  const res = await fetch(`${BASE}/runs/${runId}/link-strava`, {
+    method: 'DELETE',
+    headers: CF_HEADERS,
+  })
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`
+    try {
+      const b = await res.json() as { error?: string }
+      if (b.error) message = b.error
+    } catch { /* ignore */ }
+    throw new Error(message)
+  }
+  return res.json()
+}
+
 export async function syncStrava(): Promise<SyncResult> {
   const res = await fetch(`${BASE}/strava/sync`, {
     method: 'POST',
