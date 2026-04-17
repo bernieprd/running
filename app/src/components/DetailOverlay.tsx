@@ -65,7 +65,11 @@ export function DetailOverlay() {
   const stravaSynced = run.stravaActivityId !== null
 
   function handleEffortChange(v: number) {
-    updateRun(run!.id, { effortRating: EFFORT_LABELS[v - 1] })
+    if (v === effortNum) {
+      updateRun(run!.id, { effortRating: null })
+    } else {
+      updateRun(run!.id, { effortRating: EFFORT_LABELS[v - 1] })
+    }
   }
 
   function handleNotesBlur() {
@@ -75,7 +79,9 @@ export function DetailOverlay() {
   }
 
   function handleMarkComplete() {
-    if (!run!.completed) {
+    if (run!.completed) {
+      updateRun(run!.id, { completed: false, completedAt: null })
+    } else {
       updateRun(run!.id, { completed: true, completedAt: new Date().toISOString() })
     }
   }
@@ -161,7 +167,6 @@ export function DetailOverlay() {
               variant={run.completed ? 'success' : 'default'}
               className="w-full"
               onClick={handleMarkComplete}
-              disabled={run.completed}
             >
               {run.completed ? 'Completed ✓' : 'Mark Complete'}
             </Button>

@@ -35,10 +35,35 @@ const tabs = [
   },
 ]
 
+export function SideNav() {
+  return (
+    <nav className="hidden sm:flex flex-col flex-shrink-0 w-20 border-r border-border bg-surface">
+      {tabs.map(tab => (
+        <NavLink
+          key={tab.to}
+          to={tab.to}
+          end={tab.to === '/'}
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center gap-1 py-4 px-2 text-[10px] font-mono-dm uppercase tracking-wider transition-colors border-l-2',
+              isActive
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground'
+            )
+          }
+        >
+          {tab.icon}
+          {tab.label}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
 export function BottomNav() {
   return (
     <nav
-      className="flex-shrink-0 flex border-t border-border bg-surface"
+      className="flex-shrink-0 flex sm:hidden border-t border-border bg-surface"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
     >
       {tabs.map(tab => (
