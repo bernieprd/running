@@ -8,7 +8,7 @@ interface EffortBarProps {
 
 export function EffortBar({ value, interactive = false, onChange }: EffortBarProps) {
   return (
-    <div className="flex gap-2">
+    <div className={cn('flex', interactive ? 'gap-2' : 'gap-1')}>
       {[1, 2, 3, 4, 5].map(pip => {
         const filled = value !== null && pip <= value
         if (interactive) {
@@ -29,7 +29,7 @@ export function EffortBar({ value, interactive = false, onChange }: EffortBarPro
           <div
             key={pip}
             className={cn(
-              'w-5 h-5 rounded-full border-2',
+              'w-3 h-3 rounded-full border',
               filled ? 'bg-primary border-primary' : 'bg-transparent border-border'
             )}
           />
