@@ -471,6 +471,7 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
 }
 
 async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
+  await notionEnsureElapsedTimeProperty(env.NOTION_DB_ID, env.NOTION_API_KEY)
   const properties: Record<string, unknown> = {
     'Strava Activity ID': { rich_text: [] },
     'Distance (km)':      { number: null },
