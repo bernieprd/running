@@ -46,8 +46,8 @@ export default {
         },
       },
       fontFamily: {
-        syne: ['Syne', 'sans-serif'],
-        'mono-dm': ['DM Mono', 'monospace'],
+        syne: ['Bebas Neue', 'sans-serif'],
+        'mono-dm': ['IBM Plex Mono', 'monospace'],
       },
       borderRadius: {
         lg: "var(--radius)",
