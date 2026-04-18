@@ -80,6 +80,11 @@ export function DetailOverlay() {
     }
   }
 
+  function handleNotesFocus(e: React.FocusEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget
+    setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)
+  }
+
   function handleNotesBlur() {
     if (notes !== run!.notes) {
       updateRun(run!.id, { notes })
@@ -209,6 +214,7 @@ export function DetailOverlay() {
               placeholder="How did it feel?"
               value={notes}
               onChange={e => setNotes(e.target.value)}
+              onFocus={handleNotesFocus}
               onBlur={handleNotesBlur}
             />
           </div>
