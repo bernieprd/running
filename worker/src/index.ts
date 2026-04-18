@@ -136,6 +136,12 @@ function notionUpdatePage(pageId: string, body: unknown, apiKey: string): Promis
   return notionRequest(`/pages/${pageId}`, 'PATCH', body, apiKey)
 }
 
+function notionEnsureElapsedTimeProperty(dbId: string, apiKey: string): Promise<unknown> {
+  return notionRequest(`/databases/${dbId}`, 'PATCH', {
+    properties: { 'Elapsed Time': { number: { format: 'number' } } },
+  }, apiKey)
+}
+
 function notionPageToRun(page: NotionPage): RunResponse {
   const p = page.properties
   const stravaRaw = p['Strava Activity ID']?.rich_text?.[0]?.plain_text ?? ''
@@ -307,6 +313,8 @@ async function handleStravaCallback(request: Request, env: Env): Promise<Respons
 async function handleStravaSync(env: Env): Promise<Response> {
   const tokens = await getStravaTokens(env)
 
+  await notionEnsureElapsedTimeProperty(env.NOTION_DB_ID, env.NOTION_API_KEY)
+
   const afterUnix = Math.floor(new Date(env.STRAVA_PLAN_START_DATE + 'T00:00:00Z').getTime() / 1000)
   const activities = await fetchStravaActivities(tokens.access_token, afterUnix)
 
@@ -356,11 +364,13 @@ async function handleStravaSync(env: Env): Promise<Response> {
 
     const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
     const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
+    const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
 
     const properties: Record<string, unknown> = {
       'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
       'Distance (km)':     { number: distanceKm },
       'Avg Pace (min/km)': { number: avgPaceMinKm },
+      'Elapsed Time':      { number: elapsedTimeMinutes },
     }
     if (activity.average_heartrate !== undefined) {
       properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -434,6 +444,8 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
 
   const tokens = await getStravaTokens(env)
 
+  await notionEnsureElapsedTimeProperty(env.NOTION_DB_ID, env.NOTION_API_KEY)
+
   const actRes = await fetch(`https://www.strava.com/api/v3/activities/${body.stravaActivityId}`, {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   })
@@ -442,11 +454,13 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
 
   const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
   const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
+  const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
 
   const properties: Record<string, unknown> = {
     'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
     'Distance (km)':     { number: distanceKm },
     'Avg Pace (min/km)': { number: avgPaceMinKm },
+    'Elapsed Time':      { number: elapsedTimeMinutes },
   }
   if (activity.average_heartrate !== undefined) {
     properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -462,6 +476,7 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
     'Distance (km)':      { number: null },
     'Avg Pace (min/km)':  { number: null },
     'Avg HR':             { number: null },
+    'Elapsed Time':       { number: null },
   }
   const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
   return json(notionPageToRun(updated))
