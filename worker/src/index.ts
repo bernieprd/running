@@ -4,16 +4,14 @@ export interface Env {
   NOTION_DB_ID: string
   STRAVA_CLIENT_ID: string
   STRAVA_CLIENT_SECRET: string
-  STRAVA_PLAN_START_DATE: string
   ANTHROPIC_API_KEY: string
-  CF_ACCESS_CLIENT_ID: string
-  CF_ACCESS_CLIENT_SECRET: string
+  CLERK_PUBLIC_KEY: string
 }
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://bernieprd.github.io',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, CF-Access-Client-Id, CF-Access-Client-Secret',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
 
 // ---- Types ----
@@ -164,8 +162,59 @@ function dateOnly(iso: string): string {
   return iso.slice(0, 10)
 }
 
-async function getStravaTokens(env: Env): Promise<StravaTokens> {
-  const raw = await env.RUNNING_KV.get('strava_tokens')
+// ---- JWT Auth ----
+
+async function verifyClerkJwt(token: string, publicKeyPem: string): Promise<string> {
+  const parts = token.split('.')
+  if (parts.length !== 3) throw new Error('Malformed JWT')
+
+  const [headerB64, payloadB64, sigB64] = parts
+
+  const payloadJson = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))
+  const payload = JSON.parse(payloadJson) as { sub: string; exp: number }
+
+  if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Token expired')
+
+  const pemContents = publicKeyPem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g, '')
+  const keyBytes = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'spki',
+    keyBytes,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  )
+
+  const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
+  const sig = Uint8Array.from(
+    atob(sigB64.replace(/-/g, '+').replace(/_/g, '/')),
+    c => c.charCodeAt(0),
+  )
+
+  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data)
+  if (!valid) throw new Error('Invalid JWT signature')
+
+  return payload.sub
+}
+
+async function requireAuth(request: Request, env: Env): Promise<{ userId: string; slug: string }> {
+  const authHeader = request.headers.get('Authorization') ?? ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) throw new Error('Missing authorization token')
+
+  const userId = await verifyClerkJwt(token, env.CLERK_PUBLIC_KEY)
+
+  const slug = await env.RUNNING_KV.get(`users:${userId}:slug`)
+  if (!slug) throw new Error('User not configured — contact admin')
+
+  return { userId, slug }
+}
+
+// ---- Strava Tokens ----
+
+async function getStravaTokens(env: Env, userId: string): Promise<StravaTokens> {
+  const raw = await env.RUNNING_KV.get(`strava:tokens:${userId}`)
   if (!raw) throw new Error('Strava not connected — run OAuth first')
   const tokens: StravaTokens = JSON.parse(raw)
 
@@ -182,7 +231,7 @@ async function getStravaTokens(env: Env): Promise<StravaTokens> {
     })
     if (!res.ok) throw new Error(`Strava token refresh failed: ${await res.text()}`)
     const refreshed = await res.json() as StravaTokens
-    await env.RUNNING_KV.put('strava_tokens', JSON.stringify(refreshed))
+    await env.RUNNING_KV.put(`strava:tokens:${userId}`, JSON.stringify(refreshed))
     return refreshed
   }
   return tokens
@@ -199,10 +248,13 @@ async function fetchStravaActivities(accessToken: string, afterUnix: number): Pr
 
 // ---- Handlers ----
 
-async function handleGetRuns(env: Env): Promise<Response> {
+async function handleGetRuns(env: Env, slug: string): Promise<Response> {
   const result = await notionQueryDB(
     env.NOTION_DB_ID,
-    { sorts: [{ property: 'Date', direction: 'ascending' }] },
+    {
+      sorts: [{ property: 'Date', direction: 'ascending' }],
+      filter: { property: 'User', select: { equals: slug } },
+    },
     env.NOTION_API_KEY,
   ) as { results: NotionPage[] }
   return json(result.results.map(notionPageToRun))
@@ -247,14 +299,16 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
 }
 
 function handleStravaAuth(request: Request, env: Env): Response {
-  const origin = new URL(request.url).origin
-  const redirectUri = `${origin}/strava/callback`
+  const url = new URL(request.url)
+  const userId = url.searchParams.get('userId') ?? ''
+  const state = btoa(JSON.stringify({ userId }))
   const params = new URLSearchParams({
     client_id: env.STRAVA_CLIENT_ID,
-    redirect_uri: redirectUri,
+    redirect_uri: `${url.origin}/strava/callback`,
     response_type: 'code',
     approval_prompt: 'auto',
     scope: 'activity:read_all',
+    state,
   })
   return Response.redirect(`https://www.strava.com/oauth/authorize?${params.toString()}`, 302)
 }
@@ -267,6 +321,12 @@ async function handleStravaCallback(request: Request, env: Env): Promise<Respons
   if (error || !code) {
     return new Response(`Strava auth denied: ${error ?? 'no code'}`, { status: 400 })
   }
+
+  let userId = ''
+  try {
+    const stateRaw = url.searchParams.get('state') ?? ''
+    userId = (JSON.parse(atob(stateRaw)) as { userId: string }).userId
+  } catch { /* ignore — userId will be empty */ }
 
   const redirectUri = `${url.origin}/strava/callback`
   const res = await fetch('https://www.strava.com/oauth/token', {
@@ -296,7 +356,10 @@ async function handleStravaCallback(request: Request, env: Env): Promise<Respons
     refresh_token: data.refresh_token,
     expires_at: data.expires_at,
   }
-  await env.RUNNING_KV.put('strava_tokens', JSON.stringify(tokens))
+
+  if (userId) {
+    await env.RUNNING_KV.put(`strava:tokens:${userId}`, JSON.stringify(tokens))
+  }
 
   return new Response(
     '<html><body><p>Strava connected. You can close this tab.</p></body></html>',
@@ -304,18 +367,23 @@ async function handleStravaCallback(request: Request, env: Env): Promise<Respons
   )
 }
 
-async function handleStravaSync(env: Env): Promise<Response> {
-  const tokens = await getStravaTokens(env)
+async function handleStravaSync(env: Env, userId: string, slug: string): Promise<Response> {
+  const tokens = await getStravaTokens(env, userId)
 
-  const afterUnix = Math.floor(new Date(env.STRAVA_PLAN_START_DATE + 'T00:00:00Z').getTime() / 1000)
+  const startDate = await env.RUNNING_KV.get(`users:${userId}:plan_start_date`)
+  if (!startDate) throw new Error('Plan start date not configured — call POST /seed-plan first')
+
+  const afterUnix = Math.floor(new Date(startDate + 'T00:00:00Z').getTime() / 1000)
   const activities = await fetchStravaActivities(tokens.access_token, afterUnix)
 
   const notionResult = await notionQueryDB(
     env.NOTION_DB_ID,
     {
       filter: {
-        property: 'Strava Activity ID',
-        rich_text: { is_empty: true },
+        and: [
+          { property: 'Strava Activity ID', rich_text: { is_empty: true } },
+          { property: 'User', select: { equals: slug } },
+        ],
       },
     },
     env.NOTION_API_KEY,
@@ -381,8 +449,8 @@ async function handleStravaSync(env: Env): Promise<Response> {
   return json(result)
 }
 
-async function handleGetUnmatchedActivities(env: Env): Promise<Response> {
-  const tokens = await getStravaTokens(env)
+async function handleGetUnmatchedActivities(env: Env, userId: string, slug: string): Promise<Response> {
+  const tokens = await getStravaTokens(env, userId)
 
   const url = `https://www.strava.com/api/v3/athlete/activities?per_page=30`
   const res = await fetch(url, {
@@ -395,8 +463,10 @@ async function handleGetUnmatchedActivities(env: Env): Promise<Response> {
     env.NOTION_DB_ID,
     {
       filter: {
-        property: 'Strava Activity ID',
-        rich_text: { is_not_empty: true },
+        and: [
+          { property: 'Strava Activity ID', rich_text: { is_not_empty: true } },
+          { property: 'User', select: { equals: slug } },
+        ],
       },
     },
     env.NOTION_API_KEY,
@@ -420,7 +490,7 @@ async function handleGetUnmatchedActivities(env: Env): Promise<Response> {
   return json(unmatched)
 }
 
-async function handleLinkStrava(pageId: string, request: Request, env: Env): Promise<Response> {
+async function handleLinkStrava(pageId: string, request: Request, env: Env, userId: string): Promise<Response> {
   let body: { stravaActivityId?: number }
   try {
     body = await request.json() as { stravaActivityId?: number }
@@ -432,7 +502,7 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
     return json({ error: 'Missing stravaActivityId' }, 400)
   }
 
-  const tokens = await getStravaTokens(env)
+  const tokens = await getStravaTokens(env, userId)
 
   const actRes = await fetch(`https://www.strava.com/api/v3/activities/${body.stravaActivityId}`, {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
@@ -467,6 +537,47 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
   return json(notionPageToRun(updated))
 }
 
+async function handleReviewWeek(env: Env, slug: string): Promise<Response> {
+  const today = new Date()
+  const weekStart = new Date(today)
+  weekStart.setUTCDate(today.getUTCDate() - today.getUTCDay())
+  const weekStartStr = dateOnly(weekStart.toISOString())
+
+  const result = await notionQueryDB(
+    env.NOTION_DB_ID,
+    {
+      filter: {
+        and: [
+          { property: 'User', select: { equals: slug } },
+          { property: 'Completed', checkbox: { equals: true } },
+          { property: 'Date', date: { on_or_after: weekStartStr } },
+        ],
+      },
+      sorts: [{ property: 'Date', direction: 'ascending' }],
+    },
+    env.NOTION_API_KEY,
+  ) as { results: NotionPage[] }
+
+  return json(result.results.map(notionPageToRun))
+}
+
+async function handleSeedPlan(request: Request, env: Env, userId: string): Promise<Response> {
+  let body: { startDate?: string }
+  try {
+    body = await request.json() as { startDate?: string }
+  } catch {
+    return json({ error: 'Invalid request body' }, 400)
+  }
+
+  if (!body.startDate) return json({ error: 'startDate required' }, 400)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.startDate)) {
+    return json({ error: 'startDate must be YYYY-MM-DD' }, 400)
+  }
+
+  await env.RUNNING_KV.put(`users:${userId}:plan_start_date`, body.startDate)
+  return json({ ok: true, startDate: body.startDate })
+}
+
 // ---- Router ----
 
 export default {
@@ -492,43 +603,50 @@ export default {
       }
     }
 
-    const clientId = request.headers.get('CF-Access-Client-Id') ?? ''
-    const clientSecret = request.headers.get('CF-Access-Client-Secret') ?? ''
-    if (clientId !== env.CF_ACCESS_CLIENT_ID || clientSecret !== env.CF_ACCESS_CLIENT_SECRET) {
-      return json({ error: 'Unauthorized' }, 401)
+    let auth: { userId: string; slug: string }
+    try {
+      auth = await requireAuth(request, env)
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : 'Unauthorized' }, 401)
     }
 
     try {
       if (method === 'GET' && pathname === '/runs') {
-        return await handleGetRuns(env)
+        return await handleGetRuns(env, auth.slug)
       }
 
       if (method === 'PATCH' && pathname.startsWith('/runs/')) {
         const pageId = pathname.split('/')[2]
-        if (!pageId) {
-          return json({ error: 'Missing run ID' }, 400)
-        }
+        if (!pageId) return json({ error: 'Missing run ID' }, 400)
         return await handlePatchRun(pageId, request, env)
       }
 
       if (method === 'POST' && pathname === '/strava/sync') {
-        return await handleStravaSync(env)
+        return await handleStravaSync(env, auth.userId, auth.slug)
       }
 
       if (method === 'GET' && pathname === '/strava/activities/unmatched') {
-        return await handleGetUnmatchedActivities(env)
+        return await handleGetUnmatchedActivities(env, auth.userId, auth.slug)
       }
 
       if (method === 'POST' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
         const pageId = pathname.split('/')[2]
         if (!pageId) return json({ error: 'Missing run ID' }, 400)
-        return await handleLinkStrava(pageId, request, env)
+        return await handleLinkStrava(pageId, request, env, auth.userId)
       }
 
       if (method === 'DELETE' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
         const pageId = pathname.split('/')[2]
         if (!pageId) return json({ error: 'Missing run ID' }, 400)
         return await handleUnlinkStrava(pageId, env)
+      }
+
+      if (method === 'GET' && pathname === '/review-week') {
+        return await handleReviewWeek(env, auth.slug)
+      }
+
+      if (method === 'POST' && pathname === '/seed-plan') {
+        return await handleSeedPlan(request, env, auth.userId)
       }
 
       return json({ error: 'Not found' }, 404)

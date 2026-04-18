@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { UserButton } from '@clerk/clerk-react'
 import { cn } from '../lib/utils'
 
 const tabs = [
@@ -56,6 +57,9 @@ export function SideNav() {
           {tab.label}
         </NavLink>
       ))}
+      <div className="mt-auto flex justify-center py-4 px-2">
+        <UserButton afterSignOutUrl="/login" />
+      </div>
     </nav>
   )
 }
@@ -84,6 +88,9 @@ export function BottomNav() {
           {tab.label}
         </NavLink>
       ))}
+      <div className="flex flex-col items-center justify-center px-4 pt-2 pb-1 border-t-2 border-transparent">
+        <UserButton afterSignOutUrl="/login" />
+      </div>
     </nav>
   )
 }

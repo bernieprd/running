@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import { fetchRuns, patchRun } from '../lib/api'
 import type { RunResponse, PatchRunBody } from '../lib/types'
 
@@ -40,17 +41,20 @@ interface RunsContextValue {
 const RunsContext = createContext<RunsContextValue | null>(null)
 
 export function RunsProvider({ children }: { children: ReactNode }) {
+  const { getToken } = useAuth()
   const [state, dispatch] = useReducer(reducer, { runs: [], loading: true, error: null })
 
   const load = useCallback(async () => {
     dispatch({ type: 'FETCH_START' })
     try {
-      const runs = await fetchRuns()
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      const runs = await fetchRuns(token)
       dispatch({ type: 'FETCH_SUCCESS', payload: runs })
     } catch (e) {
       dispatch({ type: 'FETCH_ERROR', payload: (e as Error).message })
     }
-  }, [])
+  }, [getToken])
 
   useEffect(() => { load() }, [load])
 
@@ -68,12 +72,14 @@ export function RunsProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_RUN', payload: optimistic })
 
     try {
-      const updated = await patchRun(id, body)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      const updated = await patchRun(id, body, token)
       dispatch({ type: 'UPDATE_RUN', payload: updated })
     } catch {
       dispatch({ type: 'UPDATE_RUN', payload: original })
     }
-  }, [state.runs])
+  }, [state.runs, getToken])
 
   return (
     <RunsContext.Provider value={{ state, updateRun, refetch: load }}>

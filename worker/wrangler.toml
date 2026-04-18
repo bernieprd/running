@@ -7,10 +7,13 @@ compatibility_date = "2024-03-01"
 #   NOTION_DB_ID
 #   STRAVA_CLIENT_ID
 #   STRAVA_CLIENT_SECRET
-#   STRAVA_PLAN_START_DATE
 #   ANTHROPIC_API_KEY
-#   CF_ACCESS_CLIENT_ID      — service token client ID validated by the Worker
-#   CF_ACCESS_CLIENT_SECRET  — service token client secret validated by the Worker
+#   CLERK_PUBLIC_KEY          — RSA public key PEM used to verify Clerk session JWTs
+#
+# KV key conventions:
+#   users:{userId}:slug            — Notion "User" select value (set manually per user)
+#   users:{userId}:plan_start_date — Training plan start date (set via POST /seed-plan)
+#   strava:tokens:{userId}         — Strava OAuth tokens JSON
 
 [[kv_namespaces]]
 binding = "RUNNING_KV"

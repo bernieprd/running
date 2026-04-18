@@ -1,11 +1,15 @@
 import { useState, useCallback } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import { useRuns } from '../context/RunsContext'
 import { Button } from '../components/ui/button'
 import { Card, CardGreen } from '../components/ui/card'
 import { syncStrava } from '../lib/api'
 import type { SyncResult } from '../lib/types'
 
+const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 export function CoachView() {
+  const { getToken, userId } = useAuth()
   const { state: { runs }, refetch } = useRuns()
 
   const completed = runs.filter(r => r.completed).length
@@ -20,7 +24,9 @@ export function CoachView() {
     setSyncResult(null)
     setSyncError(null)
     try {
-      const result = await syncStrava()
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      const result = await syncStrava(token)
       setSyncResult(result)
       if (result.synced.length > 0) refetch()
     } catch (e) {
@@ -28,7 +34,11 @@ export function CoachView() {
     } finally {
       setSyncing(false)
     }
-  }, [refetch])
+  }, [refetch, getToken])
+
+  function handleConnectStrava() {
+    window.location.href = `${BASE}/strava/auth?userId=${userId ?? ''}`
+  }
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
@@ -66,6 +76,15 @@ export function CoachView() {
         disabled={syncing}
       >
         {syncing ? 'Syncing…' : 'Sync Strava'}
+      </Button>
+
+      <Button
+        size="lg"
+        variant="secondary"
+        className="w-full"
+        onClick={handleConnectStrava}
+      >
+        Connect Strava
       </Button>
 
       {syncError && (

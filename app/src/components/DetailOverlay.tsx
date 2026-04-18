@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
+import { useAuth } from '@clerk/clerk-react'
 import { useRuns } from '../context/RunsContext'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -25,6 +26,7 @@ function runTypeBadgeVariant(type: RunType | null) {
 export function DetailOverlay() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { getToken } = useAuth()
   const { state: { runs }, updateRun, refetch } = useRuns()
   const run = runs.find(r => r.id === id)
 
@@ -97,7 +99,9 @@ export function DetailOverlay() {
   async function handleUnlinkStrava() {
     setUnlinking(true)
     try {
-      await unlinkStravaActivity(run!.id)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      await unlinkStravaActivity(run!.id, token)
       refetch()
     } catch {
       // no-op
@@ -114,7 +118,9 @@ export function DetailOverlay() {
     setPickerLoading(true)
     setPickerError(null)
     try {
-      const result = await fetchUnmatchedActivities()
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      const result = await fetchUnmatchedActivities(token)
       setActivities(result)
       setShowPicker(true)
     } catch (e) {
@@ -127,7 +133,9 @@ export function DetailOverlay() {
   async function handlePickActivity(activityId: number) {
     setLinking(activityId)
     try {
-      await linkStravaActivity(run!.id, activityId)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+      await linkStravaActivity(run!.id, activityId, token)
       setShowPicker(false)
       refetch()
     } catch (e) {

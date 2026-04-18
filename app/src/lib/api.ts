@@ -2,29 +2,28 @@ import type { RunResponse, PatchRunBody, SyncResult, UnmatchedActivity } from '.
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
-const CF_HEADERS = {
-  'CF-Access-Client-Id': 'f5b163f7c4835f982df06c168ea00ed2.access',
-  'CF-Access-Client-Secret': 'f16d6d02c18f380dcdd757001035f4be3b90f39c0aed5291e615a685c3b0fbff',
+function authHeader(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` }
 }
 
-export async function fetchRuns(): Promise<RunResponse[]> {
-  const res = await fetch(`${BASE}/runs`, { headers: CF_HEADERS })
+export async function fetchRuns(token: string): Promise<RunResponse[]> {
+  const res = await fetch(`${BASE}/runs`, { headers: authHeader(token) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
-export async function patchRun(id: string, body: PatchRunBody): Promise<RunResponse> {
+export async function patchRun(id: string, body: PatchRunBody, token: string): Promise<RunResponse> {
   const res = await fetch(`${BASE}/runs/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...CF_HEADERS },
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
-export async function fetchUnmatchedActivities(): Promise<UnmatchedActivity[]> {
-  const res = await fetch(`${BASE}/strava/activities/unmatched`, { headers: CF_HEADERS })
+export async function fetchUnmatchedActivities(token: string): Promise<UnmatchedActivity[]> {
+  const res = await fetch(`${BASE}/strava/activities/unmatched`, { headers: authHeader(token) })
   if (!res.ok) {
     let message = `HTTP ${res.status}`
     try {
@@ -36,10 +35,10 @@ export async function fetchUnmatchedActivities(): Promise<UnmatchedActivity[]> {
   return res.json()
 }
 
-export async function linkStravaActivity(runId: string, stravaActivityId: number): Promise<RunResponse> {
+export async function linkStravaActivity(runId: string, stravaActivityId: number, token: string): Promise<RunResponse> {
   const res = await fetch(`${BASE}/runs/${runId}/link-strava`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...CF_HEADERS },
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
     body: JSON.stringify({ stravaActivityId }),
   })
   if (!res.ok) {
@@ -53,10 +52,10 @@ export async function linkStravaActivity(runId: string, stravaActivityId: number
   return res.json()
 }
 
-export async function unlinkStravaActivity(runId: string): Promise<RunResponse> {
+export async function unlinkStravaActivity(runId: string, token: string): Promise<RunResponse> {
   const res = await fetch(`${BASE}/runs/${runId}/link-strava`, {
     method: 'DELETE',
-    headers: CF_HEADERS,
+    headers: authHeader(token),
   })
   if (!res.ok) {
     let message = `HTTP ${res.status}`
@@ -69,10 +68,10 @@ export async function unlinkStravaActivity(runId: string): Promise<RunResponse> 
   return res.json()
 }
 
-export async function syncStrava(): Promise<SyncResult> {
+export async function syncStrava(token: string): Promise<SyncResult> {
   const res = await fetch(`${BASE}/strava/sync`, {
     method: 'POST',
-    headers: CF_HEADERS,
+    headers: authHeader(token),
   })
   if (!res.ok) {
     let message = `HTTP ${res.status}`
