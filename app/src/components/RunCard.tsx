@@ -58,11 +58,14 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
       <button
         type="button"
         onClick={handleTap}
-        className="w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left"
+        className={cn(
+          'w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left',
+          run.completed && 'border-l-4 border-l-success'
+        )}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">{run.name}</p>
+            <p className={cn('text-sm font-medium text-foreground', run.completed && 'line-through text-muted-foreground')}>{run.name}</p>
             {run.date && (
               <p className="font-mono-dm text-xs text-muted-foreground mt-0.5">{formatDate(run.date)}</p>
             )}
@@ -70,16 +73,14 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
           <Badge variant={runTypeBadgeVariant(run.type)}>{run.type}</Badge>
         </div>
         {effortNum !== null && <EffortBar value={effortNum} />}
-        {run.stravaActivityId && (
-          <div className="flex gap-4 mt-2">
-            {run.distanceKm !== null && (
-              <span className="font-mono-dm text-xs text-muted-foreground">{run.distanceKm.toFixed(1)} km</span>
-            )}
-            {run.avgPaceMinKm !== null && (
-              <span className="font-mono-dm text-xs text-muted-foreground">{formatPace(run.avgPaceMinKm)}</span>
-            )}
-          </div>
-        )}
+        <div className="flex gap-4 mt-2">
+          {run.distanceKm !== null && (
+            <span className="font-mono-dm text-xs text-success">{run.distanceKm.toFixed(1)} km</span>
+          )}
+          {run.avgPaceMinKm !== null && (
+            <span className="font-mono-dm text-xs text-muted-foreground">{formatPace(run.avgPaceMinKm)}</span>
+          )}
+        </div>
       </button>
     )
   }
@@ -108,8 +109,9 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
       {!run.completed && run.guidance && (
         <p className="text-xs text-muted-foreground line-clamp-2">{run.guidance}</p>
       )}
-      {run.completed && run.stravaActivityId && (
-        <div className="flex gap-4">
+      {run.completed && effortNum !== null && <EffortBar value={effortNum} />}
+      {run.completed && (
+        <div className="flex gap-4 mt-1">
           {run.distanceKm !== null && (
             <span className="font-mono-dm text-xs text-success">{run.distanceKm.toFixed(1)} km</span>
           )}
