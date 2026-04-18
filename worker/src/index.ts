@@ -5,7 +5,7 @@ export interface Env {
   STRAVA_CLIENT_ID: string
   STRAVA_CLIENT_SECRET: string
   ANTHROPIC_API_KEY: string
-  CLERK_PUBLIC_KEY: string
+  CLERK_JWKS_URL: string
 }
 
 const CORS = {
@@ -164,33 +164,54 @@ function dateOnly(iso: string): string {
 
 // ---- JWT Auth ----
 
-async function verifyClerkJwt(token: string, publicKeyPem: string): Promise<string> {
+interface JwkKey {
+  kid?: string
+  kty: string
+  alg?: string
+  use?: string
+  n?: string
+  e?: string
+}
+
+// Module-level cache — persists across requests within the same isolate instance
+let jwksCache: { keys: JwkKey[]; fetchedAt: number } | null = null
+const JWKS_TTL_MS = 5 * 60 * 1000
+
+async function getJwks(jwksUrl: string): Promise<JwkKey[]> {
+  const now = Date.now()
+  if (jwksCache && now - jwksCache.fetchedAt < JWKS_TTL_MS) return jwksCache.keys
+  const res = await fetch(jwksUrl)
+  if (!res.ok) throw new Error(`Failed to fetch JWKS: ${res.status}`)
+  const data = await res.json() as { keys: JwkKey[] }
+  jwksCache = { keys: data.keys, fetchedAt: now }
+  return data.keys
+}
+
+async function verifyClerkJwt(token: string, jwksUrl: string): Promise<string> {
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('Malformed JWT')
 
   const [headerB64, payloadB64, sigB64] = parts
 
-  const payloadJson = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))
-  const payload = JSON.parse(payloadJson) as { sub: string; exp: number }
+  const header = JSON.parse(atob(headerB64.replace(/-/g, '+').replace(/_/g, '/'))) as { kid?: string }
+  const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))) as { sub: string; exp: number }
 
   if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Token expired')
 
-  const pemContents = publicKeyPem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g, '')
-  const keyBytes = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+  const keys = await getJwks(jwksUrl)
+  const jwk = header.kid ? keys.find(k => k.kid === header.kid) : keys[0]
+  if (!jwk) throw new Error('No matching JWK found')
 
   const cryptoKey = await crypto.subtle.importKey(
-    'spki',
-    keyBytes,
+    'jwk',
+    jwk as JsonWebKey,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['verify'],
   )
 
   const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
-  const sig = Uint8Array.from(
-    atob(sigB64.replace(/-/g, '+').replace(/_/g, '/')),
-    c => c.charCodeAt(0),
-  )
+  const sig = Uint8Array.from(atob(sigB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
 
   const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, sig, data)
   if (!valid) throw new Error('Invalid JWT signature')
@@ -203,7 +224,7 @@ async function requireAuth(request: Request, env: Env): Promise<{ userId: string
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
   if (!token) throw new Error('Missing authorization token')
 
-  const userId = await verifyClerkJwt(token, env.CLERK_PUBLIC_KEY)
+  const userId = await verifyClerkJwt(token, env.CLERK_JWKS_URL)
 
   const slug = await env.RUNNING_KV.get(`users:${userId}:slug`)
   if (!slug) throw new Error('User not configured — contact admin')

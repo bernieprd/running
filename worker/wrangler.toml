@@ -2,13 +2,15 @@ name = "runcoach-api"
 main = "src/index.ts"
 compatibility_date = "2024-03-01"
 
+[vars]
+CLERK_JWKS_URL = "https://cuddy-arachnid-40.clerk.accounts.dev/.well-known/jwks.json"
+
 # Secrets (set via `wrangler secret put` or Cloudflare dashboard — never committed):
 #   NOTION_API_KEY
 #   NOTION_DB_ID
 #   STRAVA_CLIENT_ID
 #   STRAVA_CLIENT_SECRET
 #   ANTHROPIC_API_KEY
-#   CLERK_PUBLIC_KEY          — RSA public key PEM used to verify Clerk session JWTs
 #
 # KV key conventions:
 #   users:{userId}:slug            — Notion "User" select value (set manually per user)
