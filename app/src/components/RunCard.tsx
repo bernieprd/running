@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { Badge } from './ui/badge'
 import { EffortBar } from './EffortBar'
-import { cn, formatDate, formatPace } from '../lib/utils'
+import { cn, formatDate, formatPace, formatElapsedTime } from '../lib/utils'
 import type { RunResponse, RunType } from '../lib/types'
 
 type Variant = 'home' | 'schedule-upcoming' | 'schedule-past'
@@ -65,20 +65,25 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
       >
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
-            <p className={cn('text-sm font-medium text-foreground', run.completed && 'line-through text-muted-foreground')}>{run.name}</p>
+            <p className="text-sm font-medium text-foreground">{run.name}</p>
             {run.date && (
               <p className="font-mono-dm text-xs text-muted-foreground mt-0.5">{formatDate(run.date)}</p>
             )}
           </div>
-          <Badge variant={runTypeBadgeVariant(run.type)}>{run.type}</Badge>
+          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <Badge variant={runTypeBadgeVariant(run.type)}>{run.type}</Badge>
+            {effortNum !== null && <EffortBar value={effortNum} />}
+          </div>
         </div>
-        {effortNum !== null && <EffortBar value={effortNum} />}
         <div className="flex gap-4 mt-2">
           {run.distanceKm !== null && (
             <span className="font-mono-dm text-xs text-success">{run.distanceKm.toFixed(1)} km</span>
           )}
           {run.avgPaceMinKm !== null && (
             <span className="font-mono-dm text-xs text-muted-foreground">{formatPace(run.avgPaceMinKm)}</span>
+          )}
+          {run.elapsedTime !== null && (
+            <span className="font-mono-dm text-xs text-muted-foreground">{formatElapsedTime(run.elapsedTime)}</span>
           )}
         </div>
       </button>
@@ -97,19 +102,21 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <p className={cn('text-sm font-semibold', run.completed && 'line-through text-muted-foreground')}>
+          <p className="text-sm font-semibold">
             {run.name}
           </p>
           {run.date && (
             <p className="font-mono-dm text-xs text-muted-foreground mt-0.5">{formatDate(run.date)}</p>
           )}
         </div>
-        <Badge variant={runTypeBadgeVariant(run.type)}>{run.type}</Badge>
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+          <Badge variant={runTypeBadgeVariant(run.type)}>{run.type}</Badge>
+          {effortNum !== null && <EffortBar value={effortNum} />}
+        </div>
       </div>
       {!run.completed && run.guidance && (
         <p className="text-xs text-muted-foreground line-clamp-2">{run.guidance}</p>
       )}
-      {run.completed && effortNum !== null && <EffortBar value={effortNum} />}
       {run.completed && (
         <div className="flex gap-4 mt-1">
           {run.distanceKm !== null && (
@@ -117,6 +124,9 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
           )}
           {run.avgPaceMinKm !== null && (
             <span className="font-mono-dm text-xs text-muted-foreground">{formatPace(run.avgPaceMinKm)}</span>
+          )}
+          {run.elapsedTime !== null && (
+            <span className="font-mono-dm text-xs text-muted-foreground">{formatElapsedTime(run.elapsedTime)}</span>
           )}
         </div>
       )}

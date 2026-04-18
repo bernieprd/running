@@ -7,7 +7,7 @@ import { Button } from './ui/button'
 import { CardOrange } from './ui/card'
 import { Textarea } from './ui/textarea'
 import { EffortBar } from './EffortBar'
-import { cn, formatDate, formatPace } from '../lib/utils'
+import { cn, formatDate, formatPace, formatElapsedTime } from '../lib/utils'
 import { EFFORT_LABELS } from '../lib/types'
 import type { RunType, UnmatchedActivity } from '../lib/types'
 import { fetchUnmatchedActivities, linkStravaActivity, unlinkStravaActivity } from '../lib/api'
@@ -187,6 +187,7 @@ export function DetailOverlay() {
               { label: 'Distance', value: run.distanceKm !== null ? `${run.distanceKm.toFixed(1)} km` : '—' },
               { label: 'Avg Pace', value: run.avgPaceMinKm !== null ? formatPace(run.avgPaceMinKm) : '—' },
               { label: 'Avg HR', value: run.avgHr !== null ? `${run.avgHr} bpm` : '—' },
+              ...(run.elapsedTime !== null ? [{ label: 'Elapsed', value: formatElapsedTime(run.elapsedTime) }] : []),
             ].map(stat => (
               <div key={stat.label} className="flex items-center justify-between px-4 py-3">
                 <p className="font-mono-dm text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</p>
