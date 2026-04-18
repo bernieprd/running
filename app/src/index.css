@@ -43,9 +43,9 @@
 
 @layer utilities {
   .font-syne {
-    font-family: 'Syne', sans-serif;
+    font-family: 'Bebas Neue', sans-serif;
   }
   .font-mono-dm {
-    font-family: 'DM Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
   }
 }
