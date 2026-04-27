@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRuns } from '../context/RunsContext'
 import { RunCard } from '../components/RunCard'
 import { Card } from '../components/ui/card'
-import { cn, formatPace } from '../lib/utils'
+import { cn, formatPace, getCurrentWeek } from '../lib/utils'
 
 type Segment = 'upcoming' | 'past'
 
@@ -30,8 +30,12 @@ export function ScheduleView() {
   }
 
   const sorted = [...runs].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-  const upcoming = sorted.filter(r => !r.completed)
-  const past = sorted.filter(r => r.completed)
+  const currentWeek = getCurrentWeek(runs)
+
+  // A run is "past" if it's completed or belongs to a week before the current one.
+  // Upcoming shows only incomplete runs from the current week onwards.
+  const upcoming = sorted.filter(r => !r.completed && (r.week ?? 0) >= currentWeek)
+  const past = sorted.filter(r => r.completed || (r.week ?? 0) < currentWeek)
 
   const groupedUpcoming = upcoming.reduce((acc, run) => {
     const week = run.week ?? 0
