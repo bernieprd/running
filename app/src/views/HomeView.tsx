@@ -4,6 +4,14 @@ import { Progress } from '../components/ui/progress'
 
 const TOTAL_WEEKS = 9
 
+// Returns the Sunday that starts the calendar week containing `date`
+function getWeekSunday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - d.getDay())
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 export function HomeView() {
   const { state: { runs, loading, error }, refetch } = useRuns()
 
@@ -27,8 +35,47 @@ export function HomeView() {
   }
 
   const sorted = [...runs].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-  const firstIncomplete = sorted.find(r => !r.completed)
-  const currentWeek = firstIncomplete?.week ?? (sorted[sorted.length - 1]?.week ?? 1)
+
+  // Determine current week from today's date. Weeks run Sunday–Saturday, so
+  // a new week begins each Sunday regardless of whether prior runs were completed.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Find the earliest scheduled date per training week
+  const weekFirstDates = new Map<number, Date>()
+  for (const run of sorted) {
+    if (run.week != null && run.date) {
+      const d = new Date(run.date + 'T00:00:00')
+      const existing = weekFirstDates.get(run.week)
+      if (!existing || d < existing) weekFirstDates.set(run.week, d)
+    }
+  }
+
+  const weekNumbers = [...weekFirstDates.keys()].sort((a, b) => a - b)
+  let currentWeek = weekNumbers[weekNumbers.length - 1] ?? 1
+
+  if (weekNumbers.length > 0) {
+    const firstWeekSunday = getWeekSunday(weekFirstDates.get(weekNumbers[0])!)
+    if (today < firstWeekSunday) {
+      // Plan hasn't started yet
+      currentWeek = weekNumbers[0]
+    } else {
+      for (let i = 0; i < weekNumbers.length; i++) {
+        const weekNum = weekNumbers[i]
+        const weekStart = getWeekSunday(weekFirstDates.get(weekNum)!)
+        const nextWeekNum = weekNumbers[i + 1]
+        const nextWeekStart = nextWeekNum !== undefined
+          ? getWeekSunday(weekFirstDates.get(nextWeekNum)!)
+          : null
+
+        if (today >= weekStart && (nextWeekStart === null || today < nextWeekStart)) {
+          currentWeek = weekNum
+          break
+        }
+      }
+    }
+  }
+
   const weekRuns = sorted.filter(r => r.week === currentWeek)
   const completedCount = weekRuns.filter(r => r.completed).length
   const pct = weekRuns.length > 0 ? Math.round((completedCount / weekRuns.length) * 100) : 0
