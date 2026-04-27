@@ -371,6 +371,8 @@ async function handleStravaSync(env: Env): Promise<Response> {
       'Distance (km)':     { number: distanceKm },
       'Avg Pace (min/km)': { number: avgPaceMinKm },
       'Elapsed Time':      { number: elapsedTimeMinutes },
+      'Completed':         { checkbox: true },
+      'Completed At':      { date: { start: activity.start_date } },
     }
     if (activity.average_heartrate !== undefined) {
       properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
