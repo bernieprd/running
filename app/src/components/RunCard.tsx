@@ -31,6 +31,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
   }
 
   const effortNum = run.effortRating ? parseInt(run.effortRating) : null
+  const isDone = run.completed || run.stravaActivityId !== null
 
   if (variant === 'schedule-upcoming') {
     return (
@@ -60,7 +61,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
         onClick={handleTap}
         className={cn(
           'w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left',
-          run.completed && 'border-l-4 border-l-success'
+          isDone && 'border-l-4 border-l-success'
         )}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -97,7 +98,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
       onClick={handleTap}
       className={cn(
         'w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left',
-        run.completed && 'border-l-4 border-l-success'
+        isDone && 'border-l-4 border-l-success'
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -114,10 +115,10 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
           {effortNum !== null && <EffortBar value={effortNum} />}
         </div>
       </div>
-      {!run.completed && run.guidance && (
+      {!isDone && run.guidance && (
         <p className="text-xs text-muted-foreground line-clamp-2">{run.guidance}</p>
       )}
-      {run.completed && (
+      {isDone && (
         <div className="flex gap-4 mt-1">
           {run.distanceKm !== null && (
             <span className="font-mono-dm text-xs text-success">{run.distanceKm.toFixed(1)} km</span>
