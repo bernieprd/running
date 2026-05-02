@@ -32,10 +32,11 @@ export function ScheduleView() {
   const sorted = [...runs].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
   const currentWeek = getCurrentWeek(runs)
 
-  // A run is "past" if it's completed or belongs to a week before the current one.
-  // Upcoming shows only incomplete runs from the current week onwards.
-  const upcoming = sorted.filter(r => !r.completed && (r.week ?? 0) >= currentWeek)
-  const past = sorted.filter(r => r.completed || (r.week ?? 0) < currentWeek)
+  // A run is "done" if explicitly completed or synced from Strava — mirrors RunCard's isDone.
+  // Past shows done runs or runs from weeks before the current one.
+  const isDone = (r: typeof runs[number]) => r.completed || r.stravaActivityId !== null
+  const upcoming = sorted.filter(r => !isDone(r) && (r.week ?? 0) >= currentWeek)
+  const past = sorted.filter(r => isDone(r) || (r.week ?? 0) < currentWeek)
 
   const groupedUpcoming = upcoming.reduce((acc, run) => {
     const week = run.week ?? 0
