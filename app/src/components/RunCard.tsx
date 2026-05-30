@@ -31,7 +31,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
   }
 
   const effortNum = run.effortRating ? parseInt(run.effortRating) : null
-  const isDone = run.completed || run.stravaActivityId !== null
+  const isDone = run.completed
 
   if (variant === 'schedule-upcoming') {
     return (

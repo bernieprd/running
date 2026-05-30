@@ -463,6 +463,8 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
     'Distance (km)':     { number: distanceKm },
     'Avg Pace (min/km)': { number: avgPaceMinKm },
     'Elapsed Time':      { number: elapsedTimeMinutes },
+    'Completed':         { checkbox: true },
+    'Completed At':      { date: { start: activity.start_date } },
   }
   if (activity.average_heartrate !== undefined) {
     properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -485,6 +487,29 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
   }
   const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
   return json(notionPageToRun(updated))
+}
+
+async function handleRepairStravaCompletion(env: Env): Promise<Response> {
+  const notionResult = await notionQueryDB(
+    env.NOTION_DB_ID,
+    {
+      filter: {
+        and: [
+          { property: 'Strava Activity ID', rich_text: { is_not_empty: true } },
+          { property: 'Completed', checkbox: { equals: false } },
+        ],
+      },
+    },
+    env.NOTION_API_KEY,
+  ) as { results: NotionPage[] }
+
+  let fixed = 0
+  for (const page of notionResult.results) {
+    await notionUpdatePage(page.id, { properties: { 'Completed': { checkbox: true } } }, env.NOTION_API_KEY)
+    fixed++
+  }
+
+  return json({ fixed })
 }
 
 // ---- Router ----
@@ -549,6 +574,10 @@ export default {
         const pageId = pathname.split('/')[2]
         if (!pageId) return json({ error: 'Missing run ID' }, 400)
         return await handleUnlinkStrava(pageId, env)
+      }
+
+      if (method === 'POST' && pathname === '/admin/repair-strava-completion') {
+        return await handleRepairStravaCompletion(env)
       }
 
       return json({ error: 'Not found' }, 404)
