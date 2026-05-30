@@ -34,7 +34,7 @@ export function ScheduleView() {
 
   // A run is "done" if explicitly completed or synced from Strava — mirrors RunCard's isDone.
   // Past shows done runs or runs from weeks before the current one.
-  const isDone = (r: typeof runs[number]) => r.completed || r.stravaActivityId !== null
+  const isDone = (r: typeof runs[number]) => r.completed
   const upcoming = sorted.filter(r => !isDone(r) && (r.week ?? 0) >= currentWeek)
   const past = sorted.filter(r => isDone(r) || (r.week ?? 0) < currentWeek)
 
