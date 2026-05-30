@@ -365,6 +365,7 @@ async function handleStravaSync(env: Env): Promise<Response> {
     const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
     const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
     const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
+    const completedAt = new Date(new Date(activity.start_date).getTime() + activity.elapsed_time * 1000).toISOString()
 
     const properties: Record<string, unknown> = {
       'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
@@ -372,7 +373,7 @@ async function handleStravaSync(env: Env): Promise<Response> {
       'Avg Pace (min/km)': { number: avgPaceMinKm },
       'Elapsed Time':      { number: elapsedTimeMinutes },
       'Completed':         { checkbox: true },
-      'Completed At':      { date: { start: activity.start_date } },
+      'Completed At':      { date: { start: completedAt } },
     }
     if (activity.average_heartrate !== undefined) {
       properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -457,6 +458,7 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
   const distanceKm = parseFloat((activity.distance / 1000).toFixed(2))
   const avgPaceMinKm = parseFloat((1 / (activity.average_speed * 60 / 1000)).toFixed(2))
   const elapsedTimeMinutes = parseFloat((activity.elapsed_time / 60).toFixed(2))
+  const completedAt = new Date(new Date(activity.start_date).getTime() + activity.elapsed_time * 1000).toISOString()
 
   const properties: Record<string, unknown> = {
     'Strava Activity ID': { rich_text: [{ text: { content: String(activity.id) } }] },
@@ -464,7 +466,7 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
     'Avg Pace (min/km)': { number: avgPaceMinKm },
     'Elapsed Time':      { number: elapsedTimeMinutes },
     'Completed':         { checkbox: true },
-    'Completed At':      { date: { start: activity.start_date } },
+    'Completed At':      { date: { start: completedAt } },
   }
   if (activity.average_heartrate !== undefined) {
     properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -490,13 +492,17 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
 }
 
 async function handleRepairStravaCompletion(env: Env): Promise<Response> {
+  const tokens = await getStravaTokens(env)
+
+  // Fix runs that have a Strava ID but missing completed_at (covers both
+  // Completed=false and runs linked before the completed_at fix was deployed).
   const notionResult = await notionQueryDB(
     env.NOTION_DB_ID,
     {
       filter: {
         and: [
           { property: 'Strava Activity ID', rich_text: { is_not_empty: true } },
-          { property: 'Completed', checkbox: { equals: false } },
+          { property: 'Completed At', date: { is_empty: true } },
         ],
       },
     },
@@ -505,7 +511,23 @@ async function handleRepairStravaCompletion(env: Env): Promise<Response> {
 
   let fixed = 0
   for (const page of notionResult.results) {
-    await notionUpdatePage(page.id, { properties: { 'Completed': { checkbox: true } } }, env.NOTION_API_KEY)
+    const stravaId = page.properties['Strava Activity ID']?.rich_text?.[0]?.plain_text
+    if (!stravaId) continue
+
+    const actRes = await fetch(`https://www.strava.com/api/v3/activities/${stravaId}`, {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    })
+    if (!actRes.ok) continue
+
+    const activity = await actRes.json() as StravaActivity
+    const completedAt = new Date(new Date(activity.start_date).getTime() + activity.elapsed_time * 1000).toISOString()
+
+    await notionUpdatePage(page.id, {
+      properties: {
+        'Completed':    { checkbox: true },
+        'Completed At': { date: { start: completedAt } },
+      },
+    }, env.NOTION_API_KEY)
     fixed++
   }
 
