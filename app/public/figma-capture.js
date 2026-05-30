@@ -1,0 +1,12 @@
+(function () {
+  if (new URLSearchParams(window.location.search).get('figma') !== '1') return;
+  var s = document.createElement('script');
+  s.src = 'https://mcp.figma.com/mcp/html-to-design/capture.js';
+  document.head.appendChild(s);
+  setTimeout(function () {
+    window.location.hash = 'figmacapture&figmadelay=1000';
+    var s2 = document.createElement('script');
+    s2.src = 'https://mcp.figma.com/mcp/html-to-design/capture.js';
+    document.head.appendChild(s2);
+  }, 500);
+})();
