@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, useMatch } from 'react-router-dom'
 import { RunsProvider } from './context/RunsContext'
 import { BottomNav, SideNav } from './components/BottomNav'
 import { DetailOverlay } from './components/DetailOverlay'
@@ -9,7 +9,13 @@ import { CoachView } from './views/CoachView'
 export default function App() {
   const location = useLocation()
   const state = location.state as { backgroundLocation?: Location } | null
-  const backgroundLocation = state?.backgroundLocation
+  const isRunDetail = useMatch('/runs/:id')
+
+  // When arriving directly at /runs/:id (e.g. Figma capture), there is no
+  // backgroundLocation state. Fall back to /schedule so the overlay renders.
+  const backgroundLocation =
+    state?.backgroundLocation ??
+    (isRunDetail ? { ...location, pathname: '/schedule', state: null } : undefined)
 
   return (
     <RunsProvider>
