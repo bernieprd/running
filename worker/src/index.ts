@@ -12,7 +12,7 @@ export interface Env {
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://bernieprd.github.io',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, CF-Access-Client-Id, CF-Access-Client-Secret',
 }
 
@@ -480,6 +480,8 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
     'Avg Pace (min/km)':  { number: null },
     'Avg HR':             { number: null },
     'Elapsed Time':       { number: null },
+    'Completed':          { checkbox: false },
+    'Completed At':       { date: null },
   }
   const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
   return json(notionPageToRun(updated))
