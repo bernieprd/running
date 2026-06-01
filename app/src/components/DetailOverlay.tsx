@@ -7,7 +7,7 @@ import { Button } from './ui/button'
 import { CardOrange } from './ui/card'
 import { Textarea } from './ui/textarea'
 import { EffortBar } from './EffortBar'
-import { cn, formatDate, formatPace, formatElapsedTime } from '../lib/utils'
+import { cn, formatDate, formatPace, formatElapsedTime, isComplete, isEffectivelySkipped } from '../lib/utils'
 import { EFFORT_LABELS } from '../lib/types'
 import type { RunType, UnmatchedActivity } from '../lib/types'
 import { fetchUnmatchedActivities, linkStravaActivity, unlinkStravaActivity } from '../lib/api'
@@ -92,11 +92,15 @@ export function DetailOverlay() {
   }
 
   function handleMarkComplete() {
-    if (run!.completed) {
-      updateRun(run!.id, { completed: false, completedAt: null })
+    if (isComplete(run!)) {
+      updateRun(run!.id, { status: 'Upcoming', updatedAt: null })
     } else {
-      updateRun(run!.id, { completed: true, completedAt: new Date().toISOString() })
+      updateRun(run!.id, { status: 'Complete', updatedAt: new Date().toISOString() })
     }
+  }
+
+  function handleSkipRun() {
+    updateRun(run!.id, { status: 'Skipped', updatedAt: new Date().toISOString() })
   }
 
   async function handleUnlinkStrava() {
@@ -186,6 +190,10 @@ export function DetailOverlay() {
           </CardOrange>
         )}
 
+        {isEffectivelySkipped(run) && !stravaSynced && (
+          <p className="font-mono-dm text-xs text-muted-foreground text-center">Skipped</p>
+        )}
+
         {stravaSynced && (
           <div className="bg-surface rounded-xl border border-border divide-y divide-border">
             {[
@@ -219,14 +227,25 @@ export function DetailOverlay() {
             />
           </div>
 
+          {run.status === 'Upcoming' && !stravaSynced && (
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full"
+              onClick={handleSkipRun}
+            >
+              Skip Run
+            </Button>
+          )}
+
           {!stravaSynced && (
             <Button
               size="lg"
-              variant={run.completed ? 'success' : 'default'}
+              variant={isComplete(run) ? 'success' : 'default'}
               className="w-full"
               onClick={handleMarkComplete}
             >
-              {run.completed ? 'Completed ✓' : 'Mark Complete'}
+              {isComplete(run) ? 'Completed ✓' : 'Mark Complete'}
             </Button>
           )}
         </div>

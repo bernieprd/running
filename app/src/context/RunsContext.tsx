@@ -60,8 +60,8 @@ export function RunsProvider({ children }: { children: ReactNode }) {
 
     const optimistic: RunResponse = {
       ...original,
-      ...(body.completed !== undefined ? { completed: body.completed } : {}),
-      ...(body.completedAt !== undefined ? { completedAt: body.completedAt ?? null } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(body.updatedAt !== undefined ? { updatedAt: body.updatedAt ?? null } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
       ...(body.effortRating !== undefined ? { effortRating: body.effortRating as RunResponse['effortRating'] } : {}),
     }

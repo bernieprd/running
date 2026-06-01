@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRuns } from '../context/RunsContext'
 import { RunCard } from '../components/RunCard'
 import { Card } from '../components/ui/card'
-import { cn, formatPace, getCurrentWeek } from '../lib/utils'
+import { cn, formatPace, getCurrentWeek, isComplete, isEffectivelySkipped } from '../lib/utils'
 
 type Segment = 'upcoming' | 'past'
 
@@ -32,11 +32,8 @@ export function ScheduleView() {
   const sorted = [...runs].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
   const currentWeek = getCurrentWeek(runs)
 
-  // A run is "done" if explicitly completed or synced from Strava — mirrors RunCard's isDone.
-  // Past shows done runs or runs from weeks before the current one.
-  const isDone = (r: typeof runs[number]) => r.completed
-  const upcoming = sorted.filter(r => !isDone(r) && (r.week ?? 0) >= currentWeek)
-  const past = sorted.filter(r => isDone(r) || (r.week ?? 0) < currentWeek)
+  const upcoming = sorted.filter(r => !isEffectivelySkipped(r) && r.status === 'Upcoming' && (r.week ?? 0) >= currentWeek)
+  const past = sorted.filter(r => isComplete(r) || isEffectivelySkipped(r) || (r.week ?? 0) < currentWeek)
 
   const groupedUpcoming = upcoming.reduce((acc, run) => {
     const week = run.week ?? 0
@@ -108,7 +105,7 @@ export function ScheduleView() {
                   <p className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider">Best pace</p>
                 </div>
                 <div>
-                  <p className="font-syne text-xl font-extrabold">{past.length}</p>
+                  <p className="font-syne text-xl font-extrabold">{past.filter(r => isComplete(r)).length}</p>
                   <p className="font-mono-dm text-[10px] text-muted-foreground uppercase tracking-wider">Runs done</p>
                 </div>
               </div>

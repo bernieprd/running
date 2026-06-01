@@ -1,7 +1,7 @@
 import { useRuns } from '../context/RunsContext'
 import { RunCard } from '../components/RunCard'
 import { Progress } from '../components/ui/progress'
-import { getCurrentWeek } from '../lib/utils'
+import { getCurrentWeek, isComplete, isEffectivelySkipped } from '../lib/utils'
 
 const TOTAL_WEEKS = 9
 
@@ -31,7 +31,8 @@ export function HomeView() {
   const currentWeek = getCurrentWeek(runs)
 
   const weekRuns = sorted.filter(r => r.week === currentWeek)
-  const completedCount = weekRuns.filter(r => r.completed).length
+  const completedCount = weekRuns.filter(r => isComplete(r)).length
+  const skippedCount = weekRuns.filter(r => isEffectivelySkipped(r)).length
   const pct = weekRuns.length > 0 ? Math.round((completedCount / weekRuns.length) * 100) : 0
 
   return (
@@ -39,7 +40,7 @@ export function HomeView() {
       <div>
         <div className="flex items-baseline justify-between mb-2">
           <h1 className="font-syne text-xl font-extrabold">Week {currentWeek} of {TOTAL_WEEKS}</h1>
-          <span className="font-mono-dm text-xs text-muted-foreground">{completedCount} of {weekRuns.length} · {pct}%</span>
+          <span className="font-mono-dm text-xs text-muted-foreground">{completedCount} completed{skippedCount > 0 ? `, ${skippedCount} skipped` : ''} · {pct}%</span>
         </div>
         <Progress value={pct} />
       </div>

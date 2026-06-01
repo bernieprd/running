@@ -1,5 +1,7 @@
 export type RunType = 'Easy' | 'Tempo' | 'Long' | 'Race'
 
+export type RunStatus = 'Upcoming' | 'Complete' | 'Skipped'
+
 export type EffortRating =
   | '1 - Very Easy'
   | '2 - Easy'
@@ -24,8 +26,8 @@ export interface RunResponse {
   distanceKm: number | null
   estimatedDuration: string
   guidance: string
-  completed: boolean
-  completedAt: string | null
+  status: RunStatus
+  updatedAt: string | null
   effortRating: EffortRating | null
   notes: string
   coachNotes: string
@@ -36,8 +38,8 @@ export interface RunResponse {
 }
 
 export interface PatchRunBody {
-  completed?: boolean
-  completedAt?: string | null
+  status?: RunStatus
+  updatedAt?: string | null
   notes?: string
   effortRating?: string | null
 }

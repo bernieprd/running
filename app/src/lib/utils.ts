@@ -64,6 +64,20 @@ export function getCurrentWeek(runs: RunResponse[]): number {
   return weekNumbers[weekNumbers.length - 1]
 }
 
+export function isComplete(run: RunResponse): boolean {
+  return run.status === 'Complete'
+}
+
+export function isEffectivelySkipped(run: RunResponse): boolean {
+  if (run.status === 'Skipped') return true
+  if (run.status === 'Upcoming' && run.date) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return new Date(run.date + 'T00:00:00') < today
+  }
+  return false
+}
+
 export function formatElapsedTime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)

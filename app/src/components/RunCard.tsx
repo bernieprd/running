@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { Badge } from './ui/badge'
 import { EffortBar } from './EffortBar'
-import { cn, formatDate, formatPace, formatElapsedTime } from '../lib/utils'
+import { cn, formatDate, formatPace, formatElapsedTime, isComplete, isEffectivelySkipped } from '../lib/utils'
 import type { RunResponse, RunType } from '../lib/types'
 
 type Variant = 'home' | 'schedule-upcoming' | 'schedule-past'
@@ -31,7 +31,8 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
   }
 
   const effortNum = run.effortRating ? parseInt(run.effortRating) : null
-  const isDone = run.completed
+  const isDone = isComplete(run)
+  const isSkipped = isEffectivelySkipped(run)
 
   if (variant === 'schedule-upcoming') {
     return (
@@ -61,7 +62,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
         onClick={handleTap}
         className={cn(
           'w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left',
-          isDone && 'border-l-4 border-l-success'
+          cn(isDone && 'border-l-4 border-l-success', isSkipped && 'border-l-4 border-l-muted-foreground')
         )}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -86,6 +87,9 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
           {run.elapsedTime !== null && (
             <span className="font-mono-dm text-xs text-muted-foreground">{formatElapsedTime(run.elapsedTime)}</span>
           )}
+          {isSkipped && run.distanceKm === null && run.avgPaceMinKm === null && run.elapsedTime === null && (
+            <span className="font-mono-dm text-xs text-muted-foreground">Skipped</span>
+          )}
         </div>
       </button>
     )
@@ -98,7 +102,7 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
       onClick={handleTap}
       className={cn(
         'w-full bg-surface rounded-xl border border-border p-4 active:scale-[0.98] transition-transform text-left',
-        isDone && 'border-l-4 border-l-success'
+        cn(isDone && 'border-l-4 border-l-success', isSkipped && 'border-l-4 border-l-muted-foreground')
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -115,8 +119,11 @@ export function RunCard({ run, variant = 'home' }: RunCardProps) {
           {effortNum !== null && <EffortBar value={effortNum} />}
         </div>
       </div>
-      {!isDone && run.guidance && (
+      {!isDone && !isSkipped && run.guidance && (
         <p className="text-xs text-muted-foreground line-clamp-2">{run.guidance}</p>
+      )}
+      {isSkipped && (
+        <span className="font-mono-dm text-xs text-muted-foreground">Skipped</span>
       )}
       {isDone && (
         <div className="flex gap-4 mt-1">

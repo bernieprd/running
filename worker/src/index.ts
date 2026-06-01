@@ -10,15 +10,25 @@ export interface Env {
   CF_ACCESS_CLIENT_SECRET: string
 }
 
-const CORS = {
-  'Access-Control-Allow-Origin': 'https://bernieprd.github.io',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, CF-Access-Client-Id, CF-Access-Client-Secret',
+const ALLOWED_ORIGINS = new Set([
+  'https://bernieprd.github.io',
+  'http://localhost:5173',
+  'http://localhost:5174',
+])
+
+function getCors(origin: string | null) {
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : 'https://bernieprd.github.io'
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, CF-Access-Client-Id, CF-Access-Client-Secret',
+  }
 }
 
 // ---- Types ----
 
 type RunType = 'Easy' | 'Tempo' | 'Long' | 'Race'
+type RunStatus = 'Upcoming' | 'Complete' | 'Skipped'
 
 interface RunResponse {
   id: string
@@ -29,8 +39,8 @@ interface RunResponse {
   distanceKm: number | null
   estimatedDuration: string
   guidance: string
-  completed: boolean
-  completedAt: string | null
+  status: RunStatus
+  updatedAt: string | null
   effortRating: string | null
   notes: string
   coachNotes: string
@@ -41,8 +51,8 @@ interface RunResponse {
 }
 
 interface PatchRunBody {
-  completed?: boolean
-  completedAt?: string | null
+  status?: RunStatus
+  updatedAt?: string | null
   notes?: string
   effortRating?: string | null
 }
@@ -52,6 +62,7 @@ interface NotionProperty {
   title?: Array<{ plain_text: string }>
   rich_text?: Array<{ plain_text: string }>
   select?: { name: string } | null
+  status?: { name: string } | null  // Notion "Status" type (different from select)
   checkbox?: boolean
   date?: { start: string } | null
   number?: number | null
@@ -99,10 +110,10 @@ interface UnmatchedActivity {
 
 // ---- Helpers ----
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, origin: string | null = null): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...getCors(origin) },
   })
 }
 
@@ -154,8 +165,8 @@ function notionPageToRun(page: NotionPage): RunResponse {
     distanceKm: p['Distance (km)']?.number ?? null,
     estimatedDuration: p['Estimated duration']?.rich_text?.[0]?.plain_text ?? '',
     guidance: p['Guidance']?.rich_text?.[0]?.plain_text ?? '',
-    completed: p['Completed']?.checkbox ?? false,
-    completedAt: p['Completed At']?.date?.start ?? null,
+    status: ((p['Status']?.select?.name ?? p['Status']?.status?.name) as RunStatus | undefined) ?? 'Upcoming',
+    updatedAt: p['Updated At']?.date?.start ?? null,
     effortRating: p['Effort Rating']?.select?.name ?? null,
     notes: p['Notes']?.rich_text?.[0]?.plain_text ?? '',
     coachNotes: p['Coach Notes']?.rich_text?.[0]?.plain_text ?? '',
@@ -229,11 +240,11 @@ async function handlePatchRun(pageId: string, request: Request, env: Env): Promi
 
   const properties: Record<string, unknown> = {}
 
-  if (body.completed !== undefined) {
-    properties['Completed'] = { checkbox: body.completed }
+  if (body.status !== undefined) {
+    properties['Status'] = { status: { name: body.status } }
   }
-  if (body.completedAt !== undefined) {
-    properties['Completed At'] = { date: body.completedAt ? { start: body.completedAt } : null }
+  if (body.updatedAt !== undefined) {
+    properties['Updated At'] = { date: body.updatedAt ? { start: body.updatedAt } : null }
   }
   if (body.notes !== undefined) {
     properties['Notes'] = { rich_text: [{ text: { content: body.notes } }] }
@@ -372,8 +383,8 @@ async function handleStravaSync(env: Env): Promise<Response> {
       'Distance (km)':     { number: distanceKm },
       'Avg Pace (min/km)': { number: avgPaceMinKm },
       'Elapsed Time':      { number: elapsedTimeMinutes },
-      'Completed':         { checkbox: true },
-      'Completed At':      { date: { start: completedAt } },
+      'Status':            { status: { name: 'Complete' } },
+      'Updated At':        { date: { start: completedAt } },
     }
     if (activity.average_heartrate !== undefined) {
       properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -465,8 +476,8 @@ async function handleLinkStrava(pageId: string, request: Request, env: Env): Pro
     'Distance (km)':     { number: distanceKm },
     'Avg Pace (min/km)': { number: avgPaceMinKm },
     'Elapsed Time':      { number: elapsedTimeMinutes },
-    'Completed':         { checkbox: true },
-    'Completed At':      { date: { start: completedAt } },
+    'Status':            { status: { name: 'Complete' } },
+    'Updated At':        { date: { start: completedAt } },
   }
   if (activity.average_heartrate !== undefined) {
     properties['Avg HR'] = { number: Math.round(activity.average_heartrate) }
@@ -484,8 +495,8 @@ async function handleUnlinkStrava(pageId: string, env: Env): Promise<Response> {
     'Avg Pace (min/km)':  { number: null },
     'Avg HR':             { number: null },
     'Elapsed Time':       { number: null },
-    'Completed':          { checkbox: false },
-    'Completed At':       { date: null },
+    'Status':             { status: { name: 'Upcoming' } },
+    'Updated At':         { date: null },
   }
   const updated = await notionUpdatePage(pageId, { properties }, env.NOTION_API_KEY) as NotionPage
   return json(notionPageToRun(updated))
@@ -502,7 +513,7 @@ async function handleRepairStravaCompletion(env: Env): Promise<Response> {
       filter: {
         and: [
           { property: 'Strava Activity ID', rich_text: { is_not_empty: true } },
-          { property: 'Completed At', date: { is_empty: true } },
+          { property: 'Updated At', date: { is_empty: true } },
         ],
       },
     },
@@ -524,8 +535,8 @@ async function handleRepairStravaCompletion(env: Env): Promise<Response> {
 
     await notionUpdatePage(page.id, {
       properties: {
-        'Completed':    { checkbox: true },
-        'Completed At': { date: { start: completedAt } },
+        'Status':     { status: { name: 'Complete' } },
+        'Updated At': { date: { start: completedAt } },
       },
     }, env.NOTION_API_KEY)
     fixed++
@@ -536,10 +547,19 @@ async function handleRepairStravaCompletion(env: Env): Promise<Response> {
 
 // ---- Router ----
 
+function withCors(response: Response, origin: string | null): Response {
+  const cors = getCors(origin)
+  const headers = new Headers(response.headers)
+  for (const [k, v] of Object.entries(cors)) headers.set(k, v)
+  return new Response(response.body, { status: response.status, headers })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const origin = request.headers.get('Origin')
+
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS })
+      return new Response(null, { status: 204, headers: getCors(origin) })
     }
 
     const url = new URL(request.url)
@@ -562,50 +582,40 @@ export default {
     const clientId = request.headers.get('CF-Access-Client-Id') ?? ''
     const clientSecret = request.headers.get('CF-Access-Client-Secret') ?? ''
     if (clientId !== env.CF_ACCESS_CLIENT_ID || clientSecret !== env.CF_ACCESS_CLIENT_SECRET) {
-      return json({ error: 'Unauthorized' }, 401)
+      return withCors(json({ error: 'Unauthorized' }, 401), origin)
     }
 
     try {
+      let res: Response
+
       if (method === 'GET' && pathname === '/runs') {
-        return await handleGetRuns(env)
-      }
-
-      if (method === 'PATCH' && pathname.startsWith('/runs/')) {
+        res = await handleGetRuns(env)
+      } else if (method === 'PATCH' && pathname.startsWith('/runs/')) {
         const pageId = pathname.split('/')[2]
-        if (!pageId) {
-          return json({ error: 'Missing run ID' }, 400)
-        }
-        return await handlePatchRun(pageId, request, env)
-      }
-
-      if (method === 'POST' && pathname === '/strava/sync') {
-        return await handleStravaSync(env)
-      }
-
-      if (method === 'GET' && pathname === '/strava/activities/unmatched') {
-        return await handleGetUnmatchedActivities(env)
-      }
-
-      if (method === 'POST' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
+        if (!pageId) return withCors(json({ error: 'Missing run ID' }, 400), origin)
+        res = await handlePatchRun(pageId, request, env)
+      } else if (method === 'POST' && pathname === '/strava/sync') {
+        res = await handleStravaSync(env)
+      } else if (method === 'GET' && pathname === '/strava/activities/unmatched') {
+        res = await handleGetUnmatchedActivities(env)
+      } else if (method === 'POST' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
         const pageId = pathname.split('/')[2]
-        if (!pageId) return json({ error: 'Missing run ID' }, 400)
-        return await handleLinkStrava(pageId, request, env)
-      }
-
-      if (method === 'DELETE' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
+        if (!pageId) return withCors(json({ error: 'Missing run ID' }, 400), origin)
+        res = await handleLinkStrava(pageId, request, env)
+      } else if (method === 'DELETE' && pathname.startsWith('/runs/') && pathname.endsWith('/link-strava')) {
         const pageId = pathname.split('/')[2]
-        if (!pageId) return json({ error: 'Missing run ID' }, 400)
-        return await handleUnlinkStrava(pageId, env)
+        if (!pageId) return withCors(json({ error: 'Missing run ID' }, 400), origin)
+        res = await handleUnlinkStrava(pageId, env)
+      } else if (method === 'POST' && pathname === '/admin/repair-strava-completion') {
+        res = await handleRepairStravaCompletion(env)
+      } else {
+        res = json({ error: 'Not found' }, 404)
       }
 
-      if (method === 'POST' && pathname === '/admin/repair-strava-completion') {
-        return await handleRepairStravaCompletion(env)
-      }
-
-      return json({ error: 'Not found' }, 404)
+      return withCors(res, origin)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      return json({ error: message }, 502)
+      return withCors(json({ error: message }, 502), origin)
     }
   },
 }

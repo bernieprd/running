@@ -8,8 +8,8 @@ import type { SyncResult } from '../lib/types'
 export function CoachView() {
   const { state: { runs }, refetch } = useRuns()
 
-  const completed = runs.filter(r => r.completed).length
-  const remaining = runs.filter(r => !r.completed).length
+  const completed = runs.filter(r => r.status === 'Complete').length
+  const remaining = runs.filter(r => r.status === 'Upcoming').length
 
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
